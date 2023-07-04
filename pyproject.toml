@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "kafka-earliest-timestamp-exporter"
+version = "0.1.0"
+description = "Prometheus exporter for earliest timestamp in kafka topics"
+authors = ["ermakov-oleg <ermakovolegs@gmail.com>"]
+readme = "README.md"
+
+
+[tool.poetry.scripts]
+kafka-earliest-timestamp-exporter = "kafka_earliest_timestamp_exporter.cli:cli"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+prometheus-client = "^0.12.0"
+confluent-kafka = "^2.1.1"
+click = "^8.1.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
