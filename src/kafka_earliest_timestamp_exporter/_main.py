@@ -42,6 +42,7 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
     for topic, metadata in consumer.list_topics().topics.items():
 
         topic_partitions = []
+        topic_offsets = {}
         for partition in metadata.partitions:
             low, high = consumer.get_watermark_offsets(TopicPartition(topic, partition))
             # Skip empty partitions
@@ -50,17 +51,19 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
 
             offset_timestamp = offset_state.get(topic, partition)
             # Skip partitions if low watermark is not changed
+
             if offset_timestamp and offset_timestamp.offset == low:
                 continue
 
+            topic_offsets[partition] = (low, high)
             topic_partitions.append(
                 TopicPartition(topic, partition, confluent_kafka.OFFSET_BEGINNING)
             )
 
         consumer.assign(topic_partitions)
-        if debug and topic_partitions:
+        if debug and topic_offsets:
             click.echo(f'Waiting for messages for topic {topic} ...')
-        while topic_partitions:
+        while topic_offsets:
             message = consumer.poll(1)
             if message:
                 if message.error():
@@ -69,21 +72,23 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
                     partition = message.partition()
                     timestamp = int(message.timestamp()[1] / 1000)
                     offset = message.offset()
+
+                    if partition not in topic_offsets:
+                        continue
+
+                    low = topic_offsets[partition][0]
+                    if offset > low:
+                        topic_offsets.pop(partition)
+                        continue
+
                     # Store offset and timestamp to cache
                     offset_state.set(topic, partition, _OffsetTimestamp(offset, timestamp))
 
-                    # Remove partition from list of partitions to poll
-                    topic_partitions = [
-                        tp
-                        for tp in topic_partitions
-                        if not (tp.partition == partition and tp.topic == topic)
-                    ]
-                    consumer.unassign()
-                    # Assign remaining partitions
-                    consumer.assign(topic_partitions)
+                    topic_offsets.pop(partition)
                     offset_state.emit_metrics()
                     if debug:
-                        click.echo(f'{topic}/{partition} -> {datetime.datetime.fromtimestamp(timestamp)}')
+                        click.echo(f'{topic}/{partition} -> {datetime.datetime.fromtimestamp(timestamp)} | {offset}')
+        consumer.unassign()
 
 
 @dataclass
@@ -195,8 +200,7 @@ class _PersistentState(_State):
                     key = message.key() if isinstance(message.key(), str) else message.key().decode('utf-8')
                     topic, partition = key.split('/')
                     offset_timestamp = self._offset_timestamp_serializer.load(json.loads(message.value()))
-                    self._cache[(topic, partition)] = offset_timestamp
-
+                    self._cache[(topic, int(partition))] = offset_timestamp
                     if message.offset() >= current_high_offsets[message.partition()]:
                         in_progress_partitions.remove(message.partition())
 
