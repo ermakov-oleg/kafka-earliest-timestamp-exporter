@@ -58,7 +58,7 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
             )
 
         consumer.assign(topic_partitions)
-        if debug:
+        if debug and topic_partitions:
             click.echo(f'Waiting for messages for topic {topic} ...')
         while topic_partitions:
             message = consumer.poll(1)
@@ -78,6 +78,7 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
                         for tp in topic_partitions
                         if not (tp.partition == partition and tp.topic == topic)
                     ]
+                    consumer.unassign()
                     # Assign remaining partitions
                     consumer.assign(topic_partitions)
                     offset_state.emit_metrics()
@@ -166,17 +167,18 @@ class _PersistentState(_State):
 
         consumer_assignments = []
         current_high_offsets = {}
-        in_progress_partitions = set(topic_metadata.partitions)
+        in_progress_partitions = set()
 
         for partition in topic_metadata.partitions:
             _, high = consumer.get_watermark_offsets(TopicPartition(self._state_topic, partition))
             current_high_offsets[partition] = high - 1
             if high > 0:
+                in_progress_partitions.add(partition)
                 consumer_assignments.append(
                     TopicPartition(self._state_topic, partition, confluent_kafka.OFFSET_BEGINNING)
                 )
 
-        if not consumer_assignments:
+        if not in_progress_partitions:
             consumer.close()
             return
 
