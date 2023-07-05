@@ -120,7 +120,6 @@ class _PersistentState(_State):
                 **config,
             }
         )
-        self._producer.list_topics(timeout=1)  # Check if broker is available
         self._load()
 
     def set(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp):
