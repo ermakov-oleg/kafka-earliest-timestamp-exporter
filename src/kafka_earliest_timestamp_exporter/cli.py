@@ -12,9 +12,10 @@ from ._main import collect
 @click.option('--host', type=str, default='127.0.0.1')
 @click.option('--port', type=int, default=7900)
 @click.option('--interval', type=int, default=60)
+@click.option('--state-persistence', is_flag=True)
 @click.option('--debug', is_flag=True)
-def cli(config: Path, host: str, port: int, interval: int, debug: bool) -> None:
+def cli(config: Path, host: str, port: int, interval: int, state_persistence: bool, debug: bool) -> None:
     click.echo(f'Start collect metrics ...')
     config_data = json.loads(config.read_text())
     start_http_server(port=port, addr=host)
-    collect(config_data, interval, debug)
+    collect(config_data, interval, state_persistence, debug)
