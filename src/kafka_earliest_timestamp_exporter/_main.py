@@ -40,6 +40,8 @@ def collect(config: dict[str, Any], interval: float, state_persistence: bool, de
 
 def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
     for topic, metadata in consumer.list_topics().topics.items():
+        if topic in offset_state.internal_topics():
+            continue
 
         topic_partitions = []
         topic_offsets = {}
@@ -106,12 +108,15 @@ class _State:
     def get(self, topic: str, partition: int) -> _OffsetTimestamp | None:
         return self._cache.get((topic, partition), None)
 
-    def set(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp):
+    def set(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp) -> None:
         self._cache[(topic, partition)] = offset_timestamp
 
-    def emit_metrics(self):
+    def emit_metrics(self) -> None:
         for (topic, partition), offset_timestamp in self._cache.items():
             kafka_topic_first_message_timestamp.labels(topic, partition).set(offset_timestamp.timestamp)
+
+    def internal_topics(self) -> list[str]:
+        return []
 
 
 class _PersistentState(_State):
@@ -128,11 +133,14 @@ class _PersistentState(_State):
         )
         self._load()
 
-    def set(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp):
+    def set(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp) -> None:
         super().set(topic, partition, offset_timestamp)
         self._publish(topic, partition, offset_timestamp)
 
-    def _publish(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp):
+    def internal_topics(self) -> list[str]:
+        return [self._state_topic]
+
+    def _publish(self, topic: str, partition: int, offset_timestamp: _OffsetTimestamp) -> None:
         key = f'{topic}/{partition}'
         self._producer.produce(
             topic=self._state_topic,
@@ -143,7 +151,7 @@ class _PersistentState(_State):
         if in_queue > 0:
             click.echo(f'Messages in publish queue: {in_queue}')
 
-    def _create_topic(self):
+    def _create_topic(self) -> None:
         click.echo(f'Creating topic {self._state_topic} for storing offsets and timestamps')
         admin = AdminClient(self._config)
         admin.create_topics(
@@ -159,7 +167,7 @@ class _PersistentState(_State):
             ]
         )[self._state_topic].result()
 
-    def _load(self):
+    def _load(self) -> None:
         consumer = Consumer(
             {
                 **_default_consumer_config,
