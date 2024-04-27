@@ -45,7 +45,7 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
         topic_partitions = []
         topic_offsets = {}
         for partition in metadata.partitions:
-            low, high = consumer.get_watermark_offsets(TopicPartition(topic, partition), cached=True)
+            low, high = consumer.get_watermark_offsets(TopicPartition(topic, partition))
             # Skip empty partitions
             if low == high:
                 continue

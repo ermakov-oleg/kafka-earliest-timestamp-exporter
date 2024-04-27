@@ -11,7 +11,7 @@ from ._main import collect
 @click.option('--config', type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
 @click.option('--host', type=str, default='127.0.0.1')
 @click.option('--port', type=int, default=7900)
-@click.option('--interval', type=int, default=60)
+@click.option('--interval', type=int, default=60 * 5)
 @click.option('--state-persistence', is_flag=True)
 @click.option('--debug', is_flag=True)
 def cli(config: Path, host: str, port: int, interval: int, state_persistence: bool, debug: bool) -> None:
