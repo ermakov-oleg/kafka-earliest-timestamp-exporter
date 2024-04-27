@@ -31,6 +31,7 @@ kafka_topic_first_message_timestamp = Gauge(
 def collect(config: dict[str, Any], interval: float, state_persistence: bool, debug: bool) -> None:
     offset_state = _PersistentState(config) if state_persistence else _State()
     while True:
+        click.echo(f'Collecting metrics ...')
         with create_consumer(config) as consumer:
             _once(consumer, offset_state, debug)
             sleep(interval)
