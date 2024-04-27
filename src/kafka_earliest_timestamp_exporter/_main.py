@@ -63,6 +63,8 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
             )
 
         consumer.assign(topic_partitions)
+        # librdkafka does not flush paused partitions after unassign
+        consumer.resume(topic_partitions)
         if debug and topic_offsets:
             click.echo(f'Waiting for messages for topic {topic} ...')
         while topic_offsets:
@@ -76,11 +78,13 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
                     offset = message.offset()
 
                     if partition not in topic_offsets:
+                        _stop_listen_partition(consumer, topic, partition)
                         continue
 
                     low = topic_offsets[partition][0]
                     if offset > low:
                         topic_offsets.pop(partition)
+                        _stop_listen_partition(consumer, topic, partition)
                         continue
 
                     # Store offset and timestamp to cache
@@ -88,9 +92,15 @@ def _once(consumer: Consumer, offset_state: '_State', debug: bool) -> None:
 
                     topic_offsets.pop(partition)
                     offset_state.emit_metrics()
+                    _stop_listen_partition(consumer, topic, partition)
                     if debug:
                         click.echo(f'{topic}/{partition} -> {datetime.datetime.fromtimestamp(timestamp)} | {offset}')
         consumer.unassign()
+
+
+def _stop_listen_partition(consumer: Consumer, topic: str, partition: int) -> None:
+    # Stop processing messages for this partition and clear partition buffer in librdkafka
+    consumer.pause([TopicPartition(topic, partition)])
 
 
 @dataclass
